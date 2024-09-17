@@ -23,6 +23,10 @@ playwright install
 
 打开 `example/` 文件夹，复制里面的 `config.yaml` 到项目根目录下，修改里面的内容，填上必要的信息。
 
+### Proxy
+
+如果你的 IP 和我一样被学校封了，可以使用代理 IP 模式，详见 `config.yaml` 里的注释。
+
 ## Run
 
 ```commandline

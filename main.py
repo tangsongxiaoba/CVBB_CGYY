@@ -8,10 +8,9 @@ if __name__ == '__main__':
         with open('config.yaml', 'r', encoding='utf-8') as ymlfile:
             cfg = yaml.safe_load(ymlfile)
         cfg['preferred_time_list'] = [tuple(item) for item in cfg['preferred_time_list']]
-        cgyy = CVBB_CGYY(cfg['student']['id'], cfg['student']['pwd'], cfg['preferred_time_list'],
-                         cfg['cjy']['username'], cfg['cjy']['password'], cfg['cjy']['softid'],
-                         cfg['snap_up_mode'], cfg['expected_stadium'], cfg['least_buddy_id'],
-                         cfg['debug_mode'])
+        cgyy = CVBB_CGYY(stu_info=cfg['student'], prior_list=cfg['preferred_time_list'], verify_info=cfg['cjy'],
+                         ip_info=cfg['ip'], scheduled_mode=cfg['scheduled_mode'], stadium=cfg['expected_stadium'],
+                         buddy=cfg['least_buddy_id'], debug_mode=cfg['debug_mode'], timer=cfg['timer'])
         with sync_playwright() as pw:
             cgyy.main(pw)
 

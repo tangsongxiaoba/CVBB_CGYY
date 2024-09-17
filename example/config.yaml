@@ -14,5 +14,12 @@ cjy:                    # 验证码平台相关信息
   password: ""          # 密码，md5-32位小写形式
   softid: ""            # 软件KEY
 
+ip: # 代理ip平台相关信息 如果没有被封禁，建议不要开启；否则可以注册快代理（https://www.kuaidaili.com/）等平台使用代理IP。
+  enable: False
+  api_url: ""
+  username: ""
+  password: ""
+
 snap_up_mode: True      # 是否为抢场模式，仅用于测试，无需更改。
 debug_mode: False       # 是否为调试模式，为 True 时可以看到操作界面。
+timer: True             # 是否打开计时器，可以检测抢场总用时时长。
