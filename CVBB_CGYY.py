@@ -10,10 +10,10 @@ import CVBB_LOGIN
 
 
 class CVBB_CGYY:
-    def __init__(self, stu_info, prior_list, verify_info, ip_info, timer, scheduled_mode=True,
-                 stadium="主馆", buddy="", debug_mode=False):
+    def __init__(self, stu_info, prior_list, verify_info, ip_info, timer, buddy, scheduled_mode=True,
+                 stadium="主馆", debug_mode=False):
 
-        if not stu_info or not prior_list or not verify_info or not ip_info:
+        if not stu_info or not prior_list or not verify_info or not ip_info or not buddy:
             print("Lack of information.")
             exit(-1)
 
@@ -32,6 +32,7 @@ class CVBB_CGYY:
         self.__ip_mode = ip_info['enable']
         self.__ip_info = ip_info
         self.__timer = timer
+        self.__timer_list = {}
 
         if stadium == "沙河":
             self.__stadium = "/57"
@@ -96,32 +97,24 @@ class CVBB_CGYY:
             exit(-1)
         print(f"Login successful, received {login_data['suc_msg']}!")
 
-    def __run(self):
-        context = self.__browser.new_context()
-        context.route("**/*", self.__block_resources)
-        page = context.new_page()
-        page.goto("https://sso.buaa.edu.cn/login?service=https://cgyy.buaa.edu.cn/venue-server/sso/manageLogin")
-        page.locator("#loginIframe").content_frame.get_by_role("textbox", name="请输入学工号").click()
-        page.locator("#loginIframe").content_frame.get_by_role("textbox", name="请输入学工号").fill(self.__stu_id)
-        page.locator("#loginIframe").content_frame.get_by_placeholder("请输入密码").click()
-        page.locator("#loginIframe").content_frame.get_by_placeholder("请输入密码").fill(self.__stu_pwd)
-        page.locator("#loginIframe").content_frame.get_by_role("button", name="登录").click()
-        page.wait_for_load_state('networkidle')
+    def __run(self, context, page):
+        if self.__scheduled_mode:
+            now = datetime.now()
+            self.__timer_list['before_seven'] = now
+            seven_am = now.replace(hour=7, minute=0, second=2, microsecond=0)
+            while now < seven_am:
+                now = datetime.now()
+        succeeded = []
+        self.__timer_list['actual_start_time'] = datetime.now()
+
         page.goto("https://cgyy.buaa.edu.cn/venue/venue-reservation" + self.__stadium)
-        page.wait_for_load_state('networkidle')
+        page.wait_for_load_state('domcontentloaded')
         try:
             page.get_by_role("button", name="关闭").click(timeout=3000)
         except TimeoutError as e:
             print(f"Error encountered: {e}. May be the pop-up no longer exists...")
         page.get_by_text(self.__date).click()
-
-        succeeded = []
-
-        if self.__scheduled_mode:
-            now = datetime.now()
-            seven_am = now.replace(hour=7, minute=0, second=2, microsecond=0)
-            while now < seven_am:
-                now = datetime.now()
+        self.__timer_list['page_load_time'] = datetime.now()
 
         for tu in self.__prior_list:
             reserved = []
@@ -141,12 +134,15 @@ class CVBB_CGYY:
                     print(f"Not found {t1}! Please check your format.")
                     continue
                 cells = page.locator(f"tbody[data-v-43ac885a] tr td:nth-child({id1})")
-                for i in range(1, cells.count() - 1): # Need improvements on court choosing
+                for i in range(1, cells.count() - 1):  # Need improvements on court choosing
                     if "free" in cells.nth(i).locator("div").first.get_attribute("class"):
                         cells.nth(i).click()
                         reserved.append(cells.nth(i).locator("..").locator("td:nth-child(1)").text_content()
                                         + " " + t1)
                         break
+
+            self.__timer_list['first_choice_complete'] = datetime.now()
+
             if not reserved:
                 print(f"no more available courts at {tu}! qwq...")
                 flag = False
@@ -185,14 +181,16 @@ class CVBB_CGYY:
                 x_offset = bbox['x'] + int(position[t][0])
                 y_offset = bbox['y'] + int(position[t][1])
                 page.mouse.click(x_offset, y_offset)
-                page.wait_for_timeout(1000)
+                page.wait_for_timeout(500)
+
+            self.__timer_list['verified'] = datetime.now()
 
             succeeded = reserved
-            page.wait_for_timeout(5000)
+            page.wait_for_load_state('domcontentloaded')
             break
 
         context.close()
-
+        self.__timer_list['finished'] = datetime.now()
         return succeeded
 
     @staticmethod
@@ -212,25 +210,38 @@ class CVBB_CGYY:
         page.locator("#loginIframe").content_frame.get_by_placeholder("请输入密码").click()
         page.locator("#loginIframe").content_frame.get_by_placeholder("请输入密码").fill(self.__stu_pwd)
         page.locator("#loginIframe").content_frame.get_by_placeholder("请输入密码").press("Enter")
-        page.wait_for_load_state('networkidle')
+        page.wait_for_load_state('domcontentloaded')
         page.goto("https://cgyy.buaa.edu.cn/venue/venues/buddies")
-        page.wait_for_load_state('networkidle')
+        page.wait_for_load_state('load')
 
         buddy_data = page.locator("div.responsiveTable div div div table tbody").text_content()
 
         if "没有加载到数据" in buddy_data:
-            if self.__buddy == "":
+            if not self.__buddy["id"]:
                 print("No buddy to play with you? Contact the author and you will find a good friend... XD")
                 exit(-1)
             page.get_by_role("button", name="添加").click()
             page.get_by_placeholder("学工号/注册手机号").click()
-            page.get_by_placeholder("学工号/注册手机号").fill(self.__buddy)
+            page.get_by_placeholder("学工号/注册手机号").fill(self.__buddy["id"])
             page.get_by_role("button", name="保存").click()
+            page.wait_for_timeout(100)
         else:
+            if self.__buddy["override"]:
+                flag = False
+                while not flag:
+                    try:
+                        page.get_by_role("button", name="删除").click(timeout=500)
+                        page.get_by_role("button", name="确定").click(timeout=500)
+                    except TimeoutError:
+                        flag = True
+                page.get_by_role("button", name="添加").click()
+                page.get_by_placeholder("学工号/注册手机号").click()
+                page.get_by_placeholder("学工号/注册手机号").fill(self.__buddy["id"])
+                page.get_by_role("button", name="保存").click()
+                page.wait_for_timeout(100)
             print("Nice! You have friends to play with you!")
 
-        page.wait_for_load_state('networkidle')
-        context.close()
+        return context, page
 
     def __get_proxy(self):
         api_url = self.__ip_info['api_url']
@@ -254,7 +265,7 @@ class CVBB_CGYY:
         while not flag:
             try:
                 page.goto("https://sso.buaa.edu.cn/login?service=https://cgyy.buaa.edu.cn/venue-server/sso/manageLogin",
-                          timeout=3000)
+                    timeout=3000)
                 page.locator("#loginIframe").content_frame.get_by_role("textbox", name="请输入学工号").click(
                     timeout=3000)
                 flag = True
@@ -272,7 +283,7 @@ class CVBB_CGYY:
         proxies = None
 
         date = datetime.today()
-        delta_day = 2 # if not in scheduled mode, this will not make sense after 0:00.
+        delta_day = 2  # if not in scheduled mode, this will not make sense after 0:00.
         date += timedelta(days=delta_day)
         date = date.strftime('%m月%d日')
         self.__date = date
@@ -292,15 +303,18 @@ class CVBB_CGYY:
             start_time = datetime.now()
 
         self.__login()
+        self.__timer_list['login'] = datetime.now()
         if self.__ip_mode:
             proxies = self.__test_proxy(playwright)
+            self.__timer_list['proxy'] = datetime.now()
         self.__browser = playwright.chromium.launch(headless=self.__headless, proxy=proxies)
 
-        self.__buddy_check()
+        context, page = self.__buddy_check()
+        self.__timer_list['buddy'] = datetime.now()
 
         print(f"You are ready to play on {self.__date} at {self.__stadium_str}...")
 
-        res = self.__run()
+        res = self.__run(context, page)
 
         if not res:
             print("Unlucky! Play badminton in a few days!")
@@ -310,6 +324,10 @@ class CVBB_CGYY:
         end_time = datetime.now()
 
         if self.__timer:
+            print(f"start: {start_time}")
+            for i in self.__timer_list:
+                print(f"{i}: {self.__timer_list[i]}")
+            print(f"end: {end_time}")
             print(f"Total time used: {end_time - start_time}.")
 
         self.__browser.close()

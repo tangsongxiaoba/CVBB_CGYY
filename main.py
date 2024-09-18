@@ -10,7 +10,7 @@ if __name__ == '__main__':
         cfg['preferred_time_list'] = [tuple(item) for item in cfg['preferred_time_list']]
         cgyy = CVBB_CGYY(stu_info=cfg['student'], prior_list=cfg['preferred_time_list'], verify_info=cfg['cjy'],
                          ip_info=cfg['ip'], scheduled_mode=cfg['scheduled_mode'], stadium=cfg['expected_stadium'],
-                         buddy=cfg['least_buddy_id'], debug_mode=cfg['debug_mode'], timer=cfg['timer'])
+                         buddy=cfg['buddy'], debug_mode=cfg['debug_mode'], timer=cfg['timer'])
         with sync_playwright() as pw:
             cgyy.main(pw)
 
